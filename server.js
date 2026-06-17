@@ -12,10 +12,7 @@ let currentScore = 0;
 let timeLeft = 300; 
 let timerInterval = null;
 
-// ตัวแปรสำหรับจำประวัติคอมโบของขวัญเพื่อแก้ปัญหาแต้มเบิ้ล
-// โครงสร้าง: { 'ชื่อคนดู_IDของขวัญ': จำนวนคอมโบล่าสุด }
-let giftComboTracker = {};
-
+// ฟังก์ชันเริ่มจับเวลา
 function startTimer() {
     if (timerInterval) return;
     timerInterval = setInterval(() => {
@@ -36,29 +33,24 @@ function formatTime(seconds) {
     return `${mins}:${secs}`;
 }
 
+// หน้าเว็บแสดงผล + หน้าปุ่มกดเทสระบบจำลอง
 app.get('/', (req, res) => {
-    // ข้ามหน้าแจ้งเตือนแรกของ ngrok ทันที
     res.setHeader('ngrok-skip-browser-warning', 'true'); 
-
     res.send(`
         <html>
             <head>
-                <title>TikTok Live Score & Timer</title>
+                <title>TikTok Live Score</title>
                 <style>
-                    body {
+                    body { 
                         background: transparent; 
-                        color: #333333; 
                         display: flex; 
                         flex-direction: column; 
                         align-items: center; 
                         justify-content: center; 
                         min-height: 100vh; 
-                        font-family: sans-serif;
-                        margin: 0;
-                        padding: 20px;
-                        box-sizing: border-box;
+                        font-family: sans-serif; 
+                        margin: 0; 
                         position: relative;
-                        overflow: hidden; 
                     }
                     .toggle-container {
                         position: absolute;
@@ -83,27 +75,9 @@ app.get('/', (req, res) => {
                         color: white;
                         border-color: #007bff;
                     }
-                    #timer {
-                        font-size: 48px;
-                        font-weight: bold;
-                        color: #ffc107; 
-                        text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
-                        margin-bottom: -10px;
-                    }
-                    .score-title {
-                        font-size: 24px; 
-                        color: #666666;
-                        font-weight: bold;
-                        text-shadow: 1px 1px 2px rgba(255,255,255,0.8); 
-                    }
-                    #score {
-                        font-size: 120px; 
-                        font-weight: bold; 
-                        color: #dc3545; 
-                        margin: 5px 0;
-                        transition: color 0.3s ease;
-                        text-shadow: -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff; 
-                    }
+                    #timer { font-size: 48px; font-weight: bold; color: #ffc107; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000; }
+                    #score { font-size: 100px; font-weight: bold; color: #dc3545; text-shadow: -2px -2px 0 #fff, 2px -2px 0 #fff; }
+                    
                     .test-container {
                         border: 2px dashed #cccccc;
                         border-radius: 12px;
@@ -121,34 +95,12 @@ app.get('/', (req, res) => {
                         display: block;
                         opacity: 1;
                     }
-                    .test-title {
-                        font-size: 18px;
-                        font-weight: bold;
-                        color: #555555;
-                        margin-bottom: 15px;
-                        text-align: center;
-                    }
-                    .btn-group {
-                        display: grid;
-                        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-                        gap: 10px;
-                        margin-bottom: 15px;
-                    }
-                    .btn {
-                        padding: 12px;
-                        font-size: 14px;
-                        font-weight: bold;
-                        cursor: pointer;
-                        border: none;
-                        border-radius: 8px;
-                        color: white;
-                        transition: transform 0.1s, background 0.2s;
-                    }
+                    .test-title { font-size: 18px; font-weight: bold; color: #555555; margin-bottom: 15px; text-align: center; }
+                    .btn-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 15px; }
+                    .btn { padding: 12px; font-size: 14px; font-weight: bold; cursor: pointer; border: none; border-radius: 8px; color: white; transition: transform 0.1s; }
                     .btn:active { transform: scale(0.95); }
                     .btn-plus { background-color: #28a745; }
-                    .btn-plus:hover { background-color: #218838; }
                     .btn-minus { background-color: #dc3545; }
-                    .btn-minus:hover { background-color: #c82333; }
                 </style>
             </head>
             <body>
@@ -156,14 +108,11 @@ app.get('/', (req, res) => {
                     <button id="toggleBtn" class="btn-toggle" onclick="toggleTestPanel()">⚙️ เปิดตัวจำลอง</button>
                 </div>
 
-                <div id="timer">${formatTime(timeLeft)}</div>
-
-                <div class="score-title">คะแนนปัจจุบัน</div>
+                <div id="timer">05:00</div>
                 <div id="score">WIN 0/10</div>
 
                 <div id="testPanel" class="test-container">
                     <div class="test-title">🧪 แผงปุ่มทดสอบระบบจำลอง</div>
-                    
                     <div style="font-weight: bold; color: #28a745; margin-bottom: 5px;">➕ ฝั่งบวกคะแนน:</div>
                     <div class="btn-group">
                         <button class="btn btn-plus" onclick="triggerTest('5655')">🌹 Rose (+1)</button>
@@ -171,11 +120,10 @@ app.get('/', (req, res) => {
                         <button class="btn btn-plus" onclick="triggerTest('7264')">👑 Mishaka Bear (+100)</button>
                         <button class="btn btn-plus" onclick="triggerTest('7168')">🐼 Money Gun (+500)</button>
                     </div>
-
                     <div style="font-weight: bold; color: #dc3545; margin-bottom: 5px;">➖ ฝั่งลบคะแนน:</div>
                     <div class="btn-group">
                         <button class="btn btn-minus" onclick="triggerTest('5269')">📱 TikTok (-1)</button>
-                        <button class="btn btn-minus" onclick="thought= 'test combo fix';triggerTest('19448')">🐌 Slowmotion (-10)</button>
+                        <button class="btn btn-minus" onclick="triggerTest('19448')">🐌 Slowmotion (-10)</button>
                         <button class="btn btn-minus" onclick="triggerTest('5585')">🎉 Confetti (-100)</button>
                         <button class="btn btn-minus" onclick="triggerTest('13072')">🐉 Dragon Crown (-500)</button>
                     </div>
@@ -184,20 +132,11 @@ app.get('/', (req, res) => {
                 <script src="/socket.io/socket.io.js"></script>
                 <script>
                     const socket = io();
-                    
-                    socket.on('updateTimer', (timeString) => {
-                        document.getElementById('timer').innerText = timeString;
-                    });
-
-                    socket.on('updateScore', (data) => {
-                        const scoreElement = document.getElementById('score');
-                        scoreElement.innerText = 'WIN ' + data.score + '/10';
-
-                        if (data.score > 0) {
-                            scoreElement.style.color = '#28a745';
-                        } else if (data.score < 1) {
-                            scoreElement.style.color = '#dc3545';
-                        }
+                    socket.on('updateTimer', (t) => document.getElementById('timer').innerText = t);
+                    socket.on('updateScore', (d) => {
+                        const s = document.getElementById('score');
+                        s.innerText = 'WIN ' + d.score + '/10';
+                        s.style.color = d.score > 0 ? '#28a745' : '#dc3545';
                     });
 
                     function triggerTest(giftId) {
@@ -223,6 +162,7 @@ app.get('/', (req, res) => {
     `);
 });
 
+// ฟังก์ชันคำนวณคะแนน
 function updateScore(amount, message) {
     currentScore += amount;
     io.emit('updateScore', { score: currentScore, msg: message });
@@ -231,67 +171,44 @@ function updateScore(amount, message) {
 }
 
 function processGiftLogic(giftId, amount) {
-    if (giftId == '5655') updateScore(1 * amount, "Rose +1");
-    else if (giftId == '5779') updateScore(10 * amount, "I Love You +10");
-    else if (giftId == '7264') updateScore(100 * amount, "Mishaka Bear +100");
-    else if (giftId == '7168') updateScore(500 * amount, "Money Gun +500");
-    else if (giftId == '5269') updateScore(-1 * amount, "TikTok -1");
-    else if (giftId == '19448') updateScore(-10 * amount, "Slowmotion -10");
-    else if (giftId == '5585') updateScore(-100 * amount, "Confetti -100");
-    else if (giftId == '13072') updateScore(-500 * amount, "Dragon Crown -500");
+    const gifts = {
+        '5655': { val: 1, name: "Rose" },
+        '5779': { val: 10, name: "I Love You" },
+        '7264': { val: 100, name: "Mishaka Bear" },
+        '7168': { val: 500, name: "Money Gun" },
+        '5269': { val: -1, name: "TikTok" },
+        '19448': { val: -10, name: "Slowmotion" },
+        '5585': { val: -100, name: "Confetti" },
+        '13072': { val: -500, name: "Dragon Crown" }
+    };
+
+    if (gifts[giftId]) {
+        updateScore(gifts[giftId].val * amount, gifts[giftId].name);
+    }
 }
 
+// ระบบรอรับค่าจากปุ่มเทสหน้าเว็บ
 io.on('connection', (socket) => {
-    socket.emit('updateTimer', formatTime(timeLeft));
-    
     socket.on('testGiftEvent', (data) => {
-        // แผงปุ่มเทสเป็นชิ้นเดี่ยวอยู่แล้ว ให้บวก 1 ตลอด
-        processGiftLogic(data.giftId, 1);
+        processGiftLogic(data.giftId, 1); // กดเทสทีละปุ่มให้เพิ่ม/ลดรอบละ 1 ชิ้น
     });
 });
 
+// เชื่อมต่อ TikTok
 const tiktokConnection = new TikTokLiveClass("https://www.tiktok.com/@sekza03/live", {
     sessionid: "644082c09b889deb60d7f1c1767642ef"
 });
 
 tiktokConnection.connect().then(() => console.log("✅ บอทเชื่อมต่อแล้ว!")).catch(err => console.error(err));
 
-// 🛡️ ส่วนประมวลผลของขวัญแบบป้องกันแต้มเบิ้ล 100%
+// ระบบประมวลผลของขวัญ (กันรัวจากสตรีมจริง)
 tiktokConnection.on('gift', data => {
-    const giftId = data.giftId;
-    const currentCombo = data.repeatCount || 1;
-    // สร้างคีย์จำเฉพาะตัว เช่น "Somchai_5655"
-    const trackerKey = `${data.userId}_${giftId}`; 
+    // ถ้ารูปแบบของขวัญเป็นคอมโบ และคนดูยังกดไม่จบ ให้รอจนกว่า repeatEnd จะเป็น true
+    if (data.giftType === 1 && !data.repeatEnd) return;
 
-    // ถ้าเป็นของขวัญชิ้นเดียวทั่วไป (ไม่ใช่สายคอมโบ)
-    if (data.giftType !== 1) {
-        processGiftLogic(giftId, currentCombo);
-        return;
-    }
-
-    // --- เริ่มต้นระบบป้องกันการนับแต้มเบิ้ลสำหรับสายคอมโบรัวๆ ---
-    const lastCombo = giftComboTracker[trackerKey] || 0;
-
-    if (currentCombo > lastCombo) {
-        // หาจำนวนที่เพิ่มขึ้นมาจริงๆ ในรอบนี้ (เช่น จากคอมโบ 5 ขยับเป็น 6 แปลว่าส่งเพิ่มมา 1)
-        const realAddedAmount = currentCombo - lastCombo;
-        
-        // อัปเดตยอดคอมโบล่าสุดเก็บไว้ในระบบจำ
-        giftComboTracker[trackerKey] = currentCombo;
-        
-        // ส่งเฉพาะจำนวนที่เพิ่มขึ้นจริงไปคำนวณแต้ม
-        processGiftLogic(giftId, realAddedAmount);
-    }
-
-    // หากคอมโบจบลง (repeatEnd = true) ให้ล้างประวัติคนนี้เพื่อรองรับการส่งรอบใหม่
-    if (data.repeatEnd) {
-        delete giftComboTracker[trackerKey];
-    }
+    // คำนวณยอดรวมเมื่อหยุดกดคอมโบแล้ว
+    const amount = data.repeatCount || 1;
+    processGiftLogic(data.giftId, amount);
 });
 
-// เคลียร์ขยะในหน่วยความจำของคอมโบทุกๆ 10 นาที ป้องกัน RAM บวมระยะยาว
-setInterval(() => {
-    giftComboTracker = {};
-}, 600000);
-
-server.listen(3000, () => console.log('🚀 เปิดดูที่ http://localhost:3000'));
+server.listen(3000, () => console.log('🚀 บอทรันแล้วที่ http://localhost:3000'));
