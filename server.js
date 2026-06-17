@@ -12,7 +12,6 @@ let currentScore = 0;
 let timeLeft = 300; 
 let timerInterval = null;
 
-// ฟังก์ชันเริ่มจับเวลา
 function startTimer() {
     if (timerInterval) return;
     timerInterval = setInterval(() => {
@@ -33,7 +32,7 @@ function formatTime(seconds) {
     return `${mins}:${secs}`;
 }
 
-// หน้าเว็บแสดงผล + หน้าปุ่มกดเทสระบบจำลอง
+// 1. หน้าจอหลัก (สำหรับใส่ใน OBS) - จะไม่มีปุ่มอะไรเลย โชว์แค่คะแนนกับเวลา คลีนๆ
 app.get('/', (req, res) => {
     res.setHeader('ngrok-skip-browser-warning', 'true'); 
     res.send(`
@@ -41,94 +40,14 @@ app.get('/', (req, res) => {
             <head>
                 <title>TikTok Live Score</title>
                 <style>
-                    body { 
-                        background: transparent; 
-                        display: flex; 
-                        flex-direction: column; 
-                        align-items: center; 
-                        justify-content: center; 
-                        min-height: 100vh; 
-                        font-family: sans-serif; 
-                        margin: 0; 
-                        position: relative;
-                    }
-                    .toggle-container {
-                        position: absolute;
-                        top: 10px;
-                        right: 10px;
-                        z-index: 999;
-                    }
-                    .btn-toggle {
-                        padding: 6px 12px;
-                        font-size: 12px;
-                        font-weight: bold;
-                        cursor: pointer;
-                        border: 1px solid #cccccc;
-                        border-radius: 20px;
-                        color: #666666;
-                        background-color: rgba(255, 255, 255, 0.8); 
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                        transition: all 0.3s ease;
-                    }
-                    .btn-toggle.active {
-                        background-color: #007bff;
-                        color: white;
-                        border-color: #007bff;
-                    }
-                    #timer { font-size: 48px; font-weight: bold; color: #ffc107; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000; }
-                    #score { font-size: 100px; font-weight: bold; color: #dc3545; text-shadow: -2px -2px 0 #fff, 2px -2px 0 #fff; }
-                    
-                    .test-container {
-                        border: 2px dashed #cccccc;
-                        border-radius: 12px;
-                        background: rgba(255, 255, 255, 0.95); 
-                        padding: 20px;
-                        max-width: 800px;
-                        width: 100%;
-                        display: none; 
-                        opacity: 0;
-                        transition: opacity 0.3s ease;
-                        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-                        margin-top: 20px;
-                    }
-                    .test-container.show {
-                        display: block;
-                        opacity: 1;
-                    }
-                    .test-title { font-size: 18px; font-weight: bold; color: #555555; margin-bottom: 15px; text-align: center; }
-                    .btn-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 15px; }
-                    .btn { padding: 12px; font-size: 14px; font-weight: bold; cursor: pointer; border: none; border-radius: 8px; color: white; transition: transform 0.1s; }
-                    .btn:active { transform: scale(0.95); }
-                    .btn-plus { background-color: #28a745; }
-                    .btn-minus { background-color: #dc3545; }
+                    body { background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; margin: 0; }
+                    #timer { font-size: 54px; font-weight: bold; color: #ffc107; text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000; }
+                    #score { font-size: 110px; font-weight: bold; color: #dc3545; text-shadow: -3px -3px 0 #fff, 3px -3px 0 #fff, -3px 3px 0 #fff, 3px 3px 0 #fff; margin-top: 10px; }
                 </style>
             </head>
             <body>
-                <div class="toggle-container">
-                    <button id="toggleBtn" class="btn-toggle" onclick="toggleTestPanel()">⚙️ เปิดตัวจำลอง</button>
-                </div>
-
                 <div id="timer">05:00</div>
                 <div id="score">WIN 0/10</div>
-
-                <div id="testPanel" class="test-container">
-                    <div class="test-title">🧪 แผงปุ่มทดสอบระบบจำลอง</div>
-                    <div style="font-weight: bold; color: #28a745; margin-bottom: 5px;">➕ ฝั่งบวกคะแนน:</div>
-                    <div class="btn-group">
-                        <button class="btn btn-plus" onclick="triggerTest('5655')">🌹 Rose (+1)</button>
-                        <button class="btn btn-plus" onclick="triggerTest('5779')">❤️ I Love You (+10)</button>
-                        <button class="btn btn-plus" onclick="triggerTest('7264')">👑 Mishaka Bear (+100)</button>
-                        <button class="btn btn-plus" onclick="triggerTest('7168')">🐼 Money Gun (+500)</button>
-                    </div>
-                    <div style="font-weight: bold; color: #dc3545; margin-bottom: 5px;">➖ ฝั่งลบคะแนน:</div>
-                    <div class="btn-group">
-                        <button class="btn btn-minus" onclick="triggerTest('5269')">📱 TikTok (-1)</button>
-                        <button class="btn btn-minus" onclick="triggerTest('19448')">🐌 Slowmotion (-10)</button>
-                        <button class="btn btn-minus" onclick="triggerTest('5585')">🎉 Confetti (-100)</button>
-                        <button class="btn btn-minus" onclick="triggerTest('13072')">🐉 Dragon Crown (-500)</button>
-                    </div>
-                </div>
-
                 <script src="/socket.io/socket.io.js"></script>
                 <script>
                     const socket = io();
@@ -138,31 +57,50 @@ app.get('/', (req, res) => {
                         s.innerText = 'WIN ' + d.score + '/10';
                         s.style.color = d.score > 0 ? '#28a745' : '#dc3545';
                     });
-
-                    function triggerTest(giftId) {
-                        socket.emit('testGiftEvent', { giftId: giftId });
-                    }
-
-                    function toggleTestPanel() {
-                        const panel = document.getElementById('testPanel');
-                        const btn = document.getElementById('toggleBtn');
-                        if (panel.classList.contains('show')) {
-                            panel.classList.remove('show');
-                            btn.classList.remove('active');
-                            btn.innerText = "⚙️ เปิดตัวจำลอง";
-                        } else {
-                            panel.classList.add('show');
-                            btn.classList.add('active');
-                            btn.innerText = "❌ ปิดตัวจำลอง";
-                        }
-                    }
                 </script>
             </body>
         </html>
     `);
 });
 
-// ฟังก์ชันคำนวณคะแนน
+// 2. หน้าควบคุมลับสำหรับแอดมิน (สำหรับเปิดในมือถือ/คอมอีกแท็บ) เพื่อกดเพิ่มลดคะแนนเอง
+app.get('/admin', (req, res) => {
+    res.send(`
+        <html>
+            <head>
+                <title>Admin Control Panel</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body { font-family: sans-serif; padding: 20px; text-align: center; background: #f4f6f9; }
+                    h2 { color: #333; }
+                    .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; max-width: 400px; margin: 20px auto; }
+                    .btn { padding: 20px; font-size: 18px; font-weight: bold; color: white; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                    .btn-plus { background: #28a745; }
+                    .btn-minus { background: #dc3545; }
+                    .btn-reset { background: #6c757d; grid-column: span 2; padding: 15px; }
+                </style>
+            </head>
+            <body>
+                <h2>🎮 แผงควบคุมคะแนน (แอดมิน)</h2>
+                <p>ใช้สำหรับกดปรับคะแนนสดๆ ในไลฟ์ด้วยตัวเอง</p>
+                <div class="btn-group">
+                    <button class="btn btn-plus" onclick="changeScore(1)">➕ เพิ่ม (+1)</button>
+                    <button class="btn btn-minus" onclick="changeScore(-1)">➖ ลด (-1)</button>
+                    <button class="btn btn-plus" onclick="changeScore(10)">➕ เพิ่ม (+10)</button>
+                    <button class="btn btn-minus" onclick="changeScore(-10)">➖ ลด (-10)</button>
+                    <button class="btn btn-reset" onclick="resetGame()">🔄 รีเซ็ตเกมใหม่ (0 แต้ม / 5 นาที)</button>
+                </div>
+                <script src="/socket.io/socket.io.js"></script>
+                <script>
+                    const socket = io();
+                    function changeScore(val) { socket.emit('adminChangeScore', { value: val }); }
+                    function resetGame() { if(confirm('ต้องการรีเซ็ตคะแนนและเวลาใช่ไหม?')) { socket.emit('adminResetGame'); } }
+                </script>
+            </body>
+        </html>
+    `);
+});
+
 function updateScore(amount, message) {
     currentScore += amount;
     io.emit('updateScore', { score: currentScore, msg: message });
@@ -187,10 +125,18 @@ function processGiftLogic(giftId, amount) {
     }
 }
 
-// ระบบรอรับค่าจากปุ่มเทสหน้าเว็บ
+// ระบบจัดการคำสั่งจากแอดมิน
 io.on('connection', (socket) => {
-    socket.on('testGiftEvent', (data) => {
-        processGiftLogic(data.giftId, 1); // กดเทสทีละปุ่มให้เพิ่ม/ลดรอบละ 1 ชิ้น
+    socket.on('adminChangeScore', (data) => {
+        updateScore(data.value, "Admin Manual Adjust");
+    });
+    socket.on('adminResetGame', () => {
+        currentScore = 0;
+        timeLeft = 300;
+        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        io.emit('updateScore', { score: currentScore, msg: "Game Reset" });
+        io.emit('updateTimer', formatTime(timeLeft));
+        console.log("🔄 แอดมินสั่งรีเซ็ตระบบใหม่");
     });
 });
 
@@ -201,12 +147,9 @@ const tiktokConnection = new TikTokLiveClass("https://www.tiktok.com/@sekza03/li
 
 tiktokConnection.connect().then(() => console.log("✅ บอทเชื่อมต่อแล้ว!")).catch(err => console.error(err));
 
-// ระบบประมวลผลของขวัญ (กันรัวจากสตรีมจริง)
+// ระบบประมวลผลของขวัญจากสตรีมจริง (กันรัว)
 tiktokConnection.on('gift', data => {
-    // ถ้ารูปแบบของขวัญเป็นคอมโบ และคนดูยังกดไม่จบ ให้รอจนกว่า repeatEnd จะเป็น true
     if (data.giftType === 1 && !data.repeatEnd) return;
-
-    // คำนวณยอดรวมเมื่อหยุดกดคอมโบแล้ว
     const amount = data.repeatCount || 1;
     processGiftLogic(data.giftId, amount);
 });
