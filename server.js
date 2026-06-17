@@ -32,7 +32,7 @@ function formatTime(seconds) {
     return `${mins}:${secs}`;
 }
 
-// 1. หน้าจอหลัก (สำหรับใส่ใน OBS) - จะไม่มีปุ่มอะไรเลย โชว์แค่คะแนนกับเวลา คลีนๆ
+// 1. หน้าจอหลัก (สำหรับใส่ใน OBS) - ลบคำว่า WIN ออกแล้ว โชว์แค่ตัวเลขคลีนๆ
 app.get('/', (req, res) => {
     res.setHeader('ngrok-skip-browser-warning', 'true'); 
     res.send(`
@@ -47,14 +47,14 @@ app.get('/', (req, res) => {
             </head>
             <body>
                 <div id="timer">05:00</div>
-                <div id="score">WIN 0/10</div>
+                <div id="score">0/10</div>
                 <script src="/socket.io/socket.io.js"></script>
                 <script>
                     const socket = io();
                     socket.on('updateTimer', (t) => document.getElementById('timer').innerText = t);
                     socket.on('updateScore', (d) => {
                         const s = document.getElementById('score');
-                        s.innerText = 'WIN ' + d.score + '/10';
+                        s.innerText = d.score + '/10';
                         s.style.color = d.score > 0 ? '#28a745' : '#dc3545';
                     });
                 </script>
@@ -63,7 +63,7 @@ app.get('/', (req, res) => {
     `);
 });
 
-// 2. หน้าควบคุมลับสำหรับแอดมิน (สำหรับเปิดในมือถือ/คอมอีกแท็บ) เพื่อกดเพิ่มลดคะแนนเอง
+// 2. หน้าควบคุมลับสำหรับแอดมิน 
 app.get('/admin', (req, res) => {
     res.send(`
         <html>
@@ -125,7 +125,6 @@ function processGiftLogic(giftId, amount) {
     }
 }
 
-// ระบบจัดการคำสั่งจากแอดมิน
 io.on('connection', (socket) => {
     socket.on('adminChangeScore', (data) => {
         updateScore(data.value, "Admin Manual Adjust");
