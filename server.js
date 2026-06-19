@@ -11,19 +11,37 @@ const io = new Server(server);
 let currentScore = 0;
 let timeLeft = 300; 
 let timerInterval = null;
+let isTimerRunning = false; 
 
-function startTimer() {
-    if (timerInterval) return;
+function startTimerLogic() {
+    if (timerInterval) clearInterval(timerInterval);
+    
+    timeLeft = 300; 
+    isTimerRunning = true;
+    io.emit('updateTimer', { time: formatTime(timeLeft), visible: true });
+
     timerInterval = setInterval(() => {
         if (timeLeft > 0) {
             timeLeft--;
-            io.emit('updateTimer', formatTime(timeLeft));
+            io.emit('updateTimer', { time: formatTime(timeLeft), visible: true });
         } else {
             clearInterval(timerInterval);
             timerInterval = null;
-            io.emit('updateTimer', "TIME OUT!");
+            isTimerRunning = false;
+            io.emit('updateTimer', { time: "TIME OUT!", visible: true });
         }
     }, 1000);
+}
+
+function stopTimerLogic() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+    isTimerRunning = false;
+    timeLeft = 300; 
+    // สั่งให้หน้าจอหลักซ่อนตัวจับเวลา
+    io.emit('updateTimer', { time: formatTime(timeLeft), visible: false });
 }
 
 function formatTime(seconds) {
@@ -32,7 +50,7 @@ function formatTime(seconds) {
     return `${mins}:${secs}`;
 }
 
-// 1. หน้าจอหลัก (สำหรับใส่ใน OBS) - คลีน 100% ไม่มีปุ่ม ไม่มีล็อกโชว์
+// 1. หน้าจอหลัก (OBS) - เพิ่มระบบ CSS Animation สำหรับการซ่อน/แสดงเวลา
 app.get('/', (req, res) => {
     res.setHeader('ngrok-skip-browser-warning', 'true'); 
     res.send(`
@@ -40,18 +58,51 @@ app.get('/', (req, res) => {
             <head>
                 <title>TikTok Live Score</title>
                 <style>
-                    body { background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; margin: 0; }
-                    #timer { font-size: 54px; font-weight: bold; color: #ffc107; text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000; }
-                    #score { font-size: 110px; font-weight: bold; color: #dc3545; text-shadow: -3px -3px 0 #fff, 3px -3px 0 #fff, -3px 3px 0 #fff, 3px 3px 0 #fff; margin-top: 10px; }
+                    body { background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; margin: 0; overflow: hidden; }
+                    
+                    /* ตัวจับเวลา: ใส่เอฟเฟกต์ซ่อนสไลด์และจางหาย */
+                    #timer { 
+                        font-size: 54px; 
+                        font-weight: bold; 
+                        color: #ffc107; 
+                        text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+                        opacity: 0;
+                        max-height: 0;
+                        transform: translateY(-20px);
+                        transition: all 0.5s ease-in-out;
+                        margin-bottom: 0;
+                    }
+                    
+                    /* คลาสพิเศษที่จะถูกใส่เพิ่มเมื่อเปิดใช้งานเวลา */
+                    #timer.show {
+                        opacity: 1;
+                        max-height: 80px;
+                        transform: translateY(0);
+                        margin-bottom: 10px;
+                    }
+                    
+                    #score { font-size: 110px; font-weight: bold; color: #dc3545; text-shadow: -3px -3px 0 #fff, 3px -3px 0 #fff, -3px 3px 0 #fff, 3px 3px 0 #fff; }
                 </style>
             </head>
             <body>
                 <div id="timer">05:00</div>
                 <div id="score">0/10</div>
+                
                 <script src="/socket.io/socket.io.js"></script>
                 <script>
                     const socket = io();
-                    socket.on('updateTimer', (t) => document.getElementById('timer').innerText = t);
+                    
+                    socket.on('updateTimer', (data) => {
+                        const timerDiv = document.getElementById('timer');
+                        timerDiv.innerText = data.time;
+                        
+                        if (data.visible) {
+                            timerDiv.classList.add('show');
+                        } else {
+                            timerDiv.classList.remove('show');
+                        }
+                    });
+                    
                     socket.on('updateScore', (d) => {
                         const s = document.getElementById('score');
                         s.innerText = d.score + '/10';
@@ -63,7 +114,7 @@ app.get('/', (req, res) => {
     `);
 });
 
-// 2. หน้าแผงควบคุมแอดมิน + ระบบเทสและรายงานผลตรวจจับกิฟต์
+// 2. หน้าแผงควบคุมแอดมิน (เหมือนเดิม)
 app.get('/admin', (req, res) => {
     res.send(`
         <html>
@@ -78,12 +129,13 @@ app.get('/admin', (req, res) => {
                     .btn { padding: 15px; font-size: 16px; font-weight: bold; color: white; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 3px 5px rgba(0,0,0,0.1); }
                     .btn-plus { background: #28a745; }
                     .btn-minus { background: #dc3545; }
+                    .btn-start { background: #20c997; font-size: 18px; }
+                    .btn-stop { background: #fd7e14; font-size: 18px; }
                     .btn-reset { background: #6c757d; grid-column: span 2; padding: 12px; font-size: 14px; }
                     
-                    /* กล่องระบบล็อกเทส */
-                    #logContainer { max-width: 450px; margin: 15px auto; background: #222; color: #00ff00; border-radius: 10px; padding: 15px; text-align: left; box-shadow: inset 0 0 10px #000; font-family: 'Courier New', Courier, monospace; font-size: 12px; }
+                    #logContainer { max-width: 450px; margin: 15px auto; background: #222; color: #00ff00; border-radius: 10px; padding: 15px; text-align: left; box-shadow: inset 0 0 10px #000; font-family: monospace; font-size: 12px; }
                     .log-title { color: #fff; font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid #444; padding-bottom: 5px; display: flex; justify-content: space-between; }
-                    #logs { max-height: 180px; overflow-y: auto; list-style: none; padding: 0; margin: 0; }
+                    #logs { max-height: 150px; overflow-y: auto; list-style: none; padding: 0; margin: 0; }
                     #logs li { margin-bottom: 6px; line-height: 1.4; border-bottom: 1px dashed #333; padding-bottom: 4px; }
                     .log-time { color: #888; }
                     .log-success { color: #00ff00; }
@@ -93,16 +145,22 @@ app.get('/admin', (req, res) => {
             <body>
                 <h2>🎮 แผงควบคุม & ระบบเทสบอท</h2>
                 
+                <div class="section-title">⏱️ ควบคุมตัวจับเวลา (Timer Control):</div>
+                <div class="btn-group">
+                    <button class="btn btn-start" onclick="controlTimer('start')">▶️ เปิด (แสดงเวลา 5 นาที)</button>
+                    <button class="btn btn-stop" onclick="controlTimer('stop')">⏹️ ปิด (ซ่อนเวลา/รีเซ็ต)</button>
+                </div>
+
                 <div class="section-title">🕹️ ปุ่มปรับคะแนนจำลอง (Manual):</div>
                 <div class="btn-group">
                     <button class="btn btn-plus" onclick="changeScore(1)">➕ เพิ่ม (+1)</button>
                     <button class="btn btn-minus" onclick="changeScore(-1)">➖ ลด (-1)</button>
                     <button class="btn btn-plus" onclick="changeScore(10)">➕ เพิ่ม (+10)</button>
                     <button class="btn btn-minus" onclick="changeScore(-10)">➖ ลด (-10)</button>
-                    <button class="btn btn-reset" onclick="resetGame()">🔄 รีเซ็ตเกม (0 แต้ม / 5 นาที)</button>
+                    <button class="btn btn-reset" onclick="resetGame()">🔄 รีเซ็ตคะแนนเกมใหม่ (เหลือ 0 แต้ม)</button>
                 </div>
 
-                <div class="section-title">🧪 ปุ่มจำลองการส่งกิฟต์จริงจาก TikTok (ใช้เทสหลังบ้าน):</div>
+                <div class="section-title">🧪 ปุ่มจำลองการส่งกิฟต์จริงจาก TikTok:</div>
                 <div class="btn-group">
                     <button class="btn" style="background:#ff851b;" onclick="testGift('5655')">🌹 เทสกุหลาบ 1 ชิ้น</button>
                     <button class="btn" style="background:#7fdbff; color:#333;" onclick="testGift('5269')">📱 เทส TikTok 1 ชิ้น</button>
@@ -122,12 +180,12 @@ app.get('/admin', (req, res) => {
                 <script>
                     const socket = io();
                     
+                    function controlTimer(action) { socket.emit('adminControlTimer', { action: action }); }
                     function changeScore(val) { socket.emit('adminChangeScore', { value: val }); }
-                    function resetGame() { if(confirm('ต้องการรีเซ็ตไหม?')) { socket.emit('adminResetGame'); } }
+                    function resetGame() { if(confirm('ต้องการรีเซ็ตคะแนนเป็น 0 ใช่ไหม?')) { socket.emit('adminResetGame'); } }
                     function testGift(id) { socket.emit('adminTestGift', { giftId: id }); }
                     function clearLogs() { document.getElementById('logs').innerHTML = ''; }
 
-                    // ฟังคำสั่งจาก Server เพื่อเอามาพิมพ์ลงในหน้าจอ Logs
                     socket.on('logToAdmin', (data) => {
                         const logsUl = document.getElementById('logs');
                         const li = document.createElement('li');
@@ -138,7 +196,6 @@ app.get('/admin', (req, res) => {
                         } else {
                             li.innerHTML = \`<span class="log-time">[\${timeStr}]</span> <span class="log-success">[TikTok]</span> \${data.text}\`;
                         }
-                        
                         logsUl.insertBefore(li, logsUl.firstChild);
                     });
                 </script>
@@ -151,14 +208,12 @@ function updateScore(amount, message, isAdmin = false) {
     currentScore += amount;
     io.emit('updateScore', { score: currentScore, msg: message });
     
-    // ส่งข้อมูลล็อกไปแสดงผลที่หน้าจอควบคุมแอดมินด้วย
     io.emit('logToAdmin', {
         type: isAdmin ? 'admin' : 'tiktok',
-        text: `คำสั่ง: ${message} | แต้มที่ปรับ: ${amount > 0 ? '+' + amount : amount} | แต้มรวมปัจจุบัน: ${currentScore}`
+        text: `${message} | แต้มที่ปรับ: ${amount > 0 ? '+' + amount : amount} | คะแนนรวม: ${currentScore}`
     });
     
     console.log(`📈 อัปเดต: ${currentScore} | ${message}`);
-    startTimer(); 
 }
 
 function processGiftLogic(giftId, amount, sourceName = "User") {
@@ -179,24 +234,29 @@ function processGiftLogic(giftId, amount, sourceName = "User") {
     }
 }
 
-// ระบบจัดการคำสั่งจากหน้าแอดมิน/หน้าเทส
 io.on('connection', (socket) => {
+    socket.on('adminControlTimer', (data) => {
+        if (data.action === 'start') {
+            startTimerLogic();
+            io.emit('logToAdmin', { type: 'admin', text: '▶️ สั่งเปิดและแสดงตัวจับเวลา (เริ่มนับ 05:00 น.)' });
+        } else if (data.action === 'stop') {
+            stopTimerLogic();
+            io.emit('logToAdmin', { type: 'admin', text: '⏹️ สั่งปิดและซ่อนตัวจับเวลาเรียบร้อย' });
+        }
+    });
+
     socket.on('adminChangeScore', (data) => {
         updateScore(data.value, "กดปุ่มปรับมือด้วยตัวเอง", true);
     });
     
-    // ระบบจำลองรับสัญญาณส่งกิฟต์เสมือนจริง (ปุ่มสีส้ม/ฟ้า)
     socket.on('adminTestGift', (data) => {
         processGiftLogic(data.giftId, 1, "บอทจำลองระบบเทส");
     });
 
     socket.on('adminResetGame', () => {
         currentScore = 0;
-        timeLeft = 300;
-        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
         io.emit('updateScore', { score: currentScore, msg: "Game Reset" });
-        io.emit('updateTimer', formatTime(timeLeft));
-        io.emit('logToAdmin', { type: 'admin', text: '🔄 สั่งรีเซ็ตแต้มเป็น 0 และเวลาเป็น 5 นาทีเรียบร้อย' });
+        io.emit('logToAdmin', { type: 'admin', text: '🔄 สั่งรีเซ็ตแต้มคะแนนเป็น 0 เรียบร้อย' });
     });
 });
 
@@ -207,7 +267,6 @@ const tiktokConnection = new TikTokLiveClass("https://www.tiktok.com/@sekza03/li
 
 tiktokConnection.connect().then(() => console.log("✅ บอทเชื่อมต่อแล้ว!")).catch(err => console.error(err));
 
-// ระบบตรวจจับกิฟต์แบบรายชิ้นจริง
 tiktokConnection.on('gift', data => {
     let actualAmount = 1;
 
@@ -217,7 +276,6 @@ tiktokConnection.on('gift', data => {
         actualAmount = 1;
     }
 
-    // ดึงชื่อคนส่งมาแสดงในกล่องบันทึกข้อมูลเพื่อความแม่นยำ
     const senderName = data.uniqueId || "คนดูในไลฟ์";
     processGiftLogic(data.giftId, actualAmount, senderName);
 });
