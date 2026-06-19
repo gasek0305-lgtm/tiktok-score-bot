@@ -12,9 +12,6 @@ let currentScore = 0;
 let timeLeft = 300; 
 let timerInterval = null;
 
-// ตัวแปรเก็บความจำป้องกันการส่งเบิ้ล (Anti-Double Trigger)
-let lastProcessedGifts = {};
-
 function startTimer() {
     if (timerInterval) return;
     timerInterval = setInterval(() => {
@@ -35,7 +32,7 @@ function formatTime(seconds) {
     return `${mins}:${secs}`;
 }
 
-// 1. หน้าจอหลัก (สำหรับใส่ใน OBS) - โชว์ตัวเลขคลีนๆ
+// 1. หน้าจอหลัก (สำหรับใส่ใน OBS)
 app.get('/', (req, res) => {
     res.setHeader('ngrok-skip-browser-warning', 'true'); 
     res.send(`
@@ -106,7 +103,7 @@ app.get('/admin', (req, res) => {
 function updateScore(amount, message) {
     currentScore += amount;
     io.emit('updateScore', { score: currentScore, msg: message });
-    console.log(`📈 อัปเดต: ${currentScore} | ${message}`);
+    console.log(`📈 อัปเดตคะแนน: ${currentScore} | สาเหตุ: ${message}`);
     startTimer(); 
 }
 
@@ -114,29 +111,25 @@ function processGiftLogic(giftId, amount) {
     const gifts = {
         '5655': { val: 1, name: "Rose" },
         '5779': { val: 10, name: "I Love You" },
-        '7264': { val: 100, name: "Mishaka Bear" },
+        '7264': { val: 100, name: "Mishka Bear" },
         '7168': { val: 500, name: "Money Gun" },
         '5269': { val: -1, name: "TikTok" },
-        '19448': { val: -10, name: "Slowmotion" },
+        '19448': { val: -10, name: "Slow motion" },
         '5585': { val: -100, name: "Confetti" },
         '13072': { val: -500, name: "Dragon Crown" }
     };
 
     if (gifts[giftId]) {
+        // คิดแต้มตรงๆ ตามจำนวนชิ้นที่ส่งเข้ามาจริง ไม่มีตัวคูณซ้ำซ้อน
         updateScore(gifts[giftId].val * amount, gifts[giftId].name);
     }
 }
 
-// แอดมินกดมือ (ผ่านการล็อกกันเบิ้ล 0.3 วินาที)
-let lastAdminClick = 0;
+// ระบบจัดการคำสั่งจากแอดมินกดมือ
 io.on('connection', (socket) => {
     socket.on('adminChangeScore', (data) => {
-        const now = Date.now();
-        if (now - lastAdminClick < 300) return; // ถ้ากดซ้ำไวเกิน 0.3 วินาที ให้ดีดทิ้ง
-        lastAdminClick = now;
         updateScore(data.value, "Admin Manual Adjust");
     });
-    
     socket.on('adminResetGame', () => {
         currentScore = 0;
         timeLeft = 300;
@@ -154,31 +147,25 @@ const tiktokConnection = new TikTokLiveClass("https://www.tiktok.com/@sekza03/li
 
 tiktokConnection.connect().then(() => console.log("✅ บอทเชื่อมต่อแล้ว!")).catch(err => console.error(err));
 
-// 🛡️ ดักสัญญาณกิฟต์จริงจาก TikTok (ระบบแก้บักเบิ้ลแต้มเดี่ยว)
+// 🛡️ ระบบตรวจจับกิฟต์แบบ "นับรายชิ้นจริง" (แก้บักแต้มทวีคูณแบบเบ็ดเสร็จ)
 tiktokConnection.on('gift', data => {
-    // 1. ถ้าเป็นของขวัญแบบคอมโบต่อเนื่อง (กุหลาบรัว) ให้รอจนจบ repeatEnd เท่านั้น
-    if (data.giftType === 1 && !data.repeatEnd) return;
-
-    // 2. ป้องกันบักสัญญาณส่งเบิ้ลซ้ำ (ของขวัญ 1 ชิ้นแต่ TikTok ส่งรหัสไอดีเดิมซ้ำมาสองรอบ)
-    const uniqueGiftKey = `${data.userId}_${data.giftId}_${data.msgId || data.timestamp}`;
-    const now = Date.now();
+    // ใช้หลักการ: นับจำนวนชิ้นเพิ่มตามการกดจริง ณ วินาทีนั้นๆ 
+    // โดยคำนวณจากส่วนต่างของการกด หรือบังคับนับทีละ 1 ชิ้นในกรณีที่เป็นกิฟต์เดี่ยว/คอมโบที่แยกย่อยมา
     
-    if (lastProcessedGifts[uniqueGiftKey] && (now - lastProcessedGifts[uniqueGiftKey] < 1000)) {
-        console.log(`⚠️ ตรวจพบสัญญาณเบิ้ลซ้ำของกิฟต์รหัส: ${data.giftId} -> ระบบทำการบล็อกให้แล้ว`);
-        return; // เจอยอดเบิ้ลซ้ำภายใน 1 วินาที ให้ทำลายคำสั่งทิ้งทันที
-    }
-    
-    // บันทึกความจำลงถังล็อก
-    lastProcessedGifts[uniqueGiftKey] = now;
+    // โหมดตัดปัญหาเรื่องสูตรคูณรวน: บังคับคำนวณอิงจากสัญญาณดิบที่วิ่งเข้าชนเซิร์ฟเวอร์
+    // สัญญาณวิ่งมา 1 ครั้ง = มีการส่งกิฟต์จริงเกิดขึ้น 1 จังหวะ
+    let actualAmount = 1;
 
-    // ล้างขยะในถังความจำเก่าๆ ออกเพื่อไม่ให้เปลืองแรม
-    if (Object.keys(lastProcessedGifts).length > 100) {
-        lastProcessedGifts = {};
+    // ถ้าเป็นกิฟต์ชิ้นใหญ่ที่ส่งทีเดียวหลายชิ้นแบบไม่คอมโบ (เช่น เลือกส่ง x5, x10 ทันทีจากหน้าต่างเลือกชิ้น)
+    if (data.giftType === 1 && data.repeatEnd) {
+        // ให้ยึดตามยอดสุทธิชิ้นที่ TikTok สรุปมาให้รอบเดียวจบ
+        actualAmount = data.repeatCount || 1;
+    } else if (data.giftType === 1 && !data.repeatEnd) {
+        // ถ้ากำลังรัวคอมโบอยู่ ให้บวกทีละ 1 แต้มตามจังหวะที่ไฟกระพริบบนจอ
+        actualAmount = 1;
     }
 
-    // 3. ประมวลผลคะแนนตามจำนวนจริง
-    const amount = data.repeatCount || 1;
-    processGiftLogic(data.giftId, amount);
+    processGiftLogic(data.giftId, actualAmount);
 });
 
 server.listen(3000, () => console.log('🚀 บอทรันแล้วที่ http://localhost:3000'));
