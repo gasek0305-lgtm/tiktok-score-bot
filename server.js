@@ -12,6 +12,9 @@ let currentScore = 0;
 let timeLeft = 300; 
 let timerInterval = null;
 
+// ตัวแปรเก็บความจำป้องกันการส่งเบิ้ล (Anti-Double Trigger)
+let lastProcessedGifts = {};
+
 function startTimer() {
     if (timerInterval) return;
     timerInterval = setInterval(() => {
@@ -32,7 +35,7 @@ function formatTime(seconds) {
     return `${mins}:${secs}`;
 }
 
-// 1. หน้าจอหลัก (สำหรับใส่ใน OBS) - ลบคำว่า WIN ออกแล้ว โชว์แค่ตัวเลขคลีนๆ
+// 1. หน้าจอหลัก (สำหรับใส่ใน OBS) - โชว์ตัวเลขคลีนๆ
 app.get('/', (req, res) => {
     res.setHeader('ngrok-skip-browser-warning', 'true'); 
     res.send(`
@@ -63,7 +66,7 @@ app.get('/', (req, res) => {
     `);
 });
 
-// 2. หน้าควบคุมลับสำหรับแอดมิน 
+// 2. หน้าควบคุมสำหรับแอดมิน
 app.get('/admin', (req, res) => {
     res.send(`
         <html>
@@ -82,7 +85,6 @@ app.get('/admin', (req, res) => {
             </head>
             <body>
                 <h2>🎮 แผงควบคุมคะแนน (แอดมิน)</h2>
-                <p>ใช้สำหรับกดปรับคะแนนสดๆ ในไลฟ์ด้วยตัวเอง</p>
                 <div class="btn-group">
                     <button class="btn btn-plus" onclick="changeScore(1)">➕ เพิ่ม (+1)</button>
                     <button class="btn btn-minus" onclick="changeScore(-1)">➖ ลด (-1)</button>
@@ -94,7 +96,7 @@ app.get('/admin', (req, res) => {
                 <script>
                     const socket = io();
                     function changeScore(val) { socket.emit('adminChangeScore', { value: val }); }
-                    function resetGame() { if(confirm('ต้องการรีเซ็ตคะแนนและเวลาใช่ไหม?')) { socket.emit('adminResetGame'); } }
+                    function resetGame() { if(confirm('ต้องการรีเซ็ตไหม?')) { socket.emit('adminResetGame'); } }
                 </script>
             </body>
         </html>
@@ -125,10 +127,16 @@ function processGiftLogic(giftId, amount) {
     }
 }
 
+// แอดมินกดมือ (ผ่านการล็อกกันเบิ้ล 0.3 วินาที)
+let lastAdminClick = 0;
 io.on('connection', (socket) => {
     socket.on('adminChangeScore', (data) => {
+        const now = Date.now();
+        if (now - lastAdminClick < 300) return; // ถ้ากดซ้ำไวเกิน 0.3 วินาที ให้ดีดทิ้ง
+        lastAdminClick = now;
         updateScore(data.value, "Admin Manual Adjust");
     });
+    
     socket.on('adminResetGame', () => {
         currentScore = 0;
         timeLeft = 300;
@@ -146,9 +154,29 @@ const tiktokConnection = new TikTokLiveClass("https://www.tiktok.com/@sekza03/li
 
 tiktokConnection.connect().then(() => console.log("✅ บอทเชื่อมต่อแล้ว!")).catch(err => console.error(err));
 
-// ระบบประมวลผลของขวัญจากสตรีมจริง (กันรัว)
+// 🛡️ ดักสัญญาณกิฟต์จริงจาก TikTok (ระบบแก้บักเบิ้ลแต้มเดี่ยว)
 tiktokConnection.on('gift', data => {
+    // 1. ถ้าเป็นของขวัญแบบคอมโบต่อเนื่อง (กุหลาบรัว) ให้รอจนจบ repeatEnd เท่านั้น
     if (data.giftType === 1 && !data.repeatEnd) return;
+
+    // 2. ป้องกันบักสัญญาณส่งเบิ้ลซ้ำ (ของขวัญ 1 ชิ้นแต่ TikTok ส่งรหัสไอดีเดิมซ้ำมาสองรอบ)
+    const uniqueGiftKey = `${data.userId}_${data.giftId}_${data.msgId || data.timestamp}`;
+    const now = Date.now();
+    
+    if (lastProcessedGifts[uniqueGiftKey] && (now - lastProcessedGifts[uniqueGiftKey] < 1000)) {
+        console.log(`⚠️ ตรวจพบสัญญาณเบิ้ลซ้ำของกิฟต์รหัส: ${data.giftId} -> ระบบทำการบล็อกให้แล้ว`);
+        return; // เจอยอดเบิ้ลซ้ำภายใน 1 วินาที ให้ทำลายคำสั่งทิ้งทันที
+    }
+    
+    // บันทึกความจำลงถังล็อก
+    lastProcessedGifts[uniqueGiftKey] = now;
+
+    // ล้างขยะในถังความจำเก่าๆ ออกเพื่อไม่ให้เปลืองแรม
+    if (Object.keys(lastProcessedGifts).length > 100) {
+        lastProcessedGifts = {};
+    }
+
+    // 3. ประมวลผลคะแนนตามจำนวนจริง
     const amount = data.repeatCount || 1;
     processGiftLogic(data.giftId, amount);
 });
