@@ -185,7 +185,7 @@ io.on('connection', (socket) => {
         if (data.action === 'start') { startTimerLogic(); } else if (data.action === 'stop') { stopTimerLogic(); }
     });
     socket.on('adminChangeScore', (data) => { updateScore(data.value, "กดปุ่มปรับมือด้วยตัวเอง", true); });
-    socket.on('adminTestGift', (data) => { processGiftLogic(data.giftId, 1, "บอทจำลองระบบเทส"); }); // ปุ่มเทสให้ส่งค่า 1 ชิ้นปกติ
+    socket.on('adminTestGift', (data) => { processGiftLogic(data.giftId, 1, "บอทจำลองระบบเทส"); }); 
     socket.on('adminResetGame', () => {
         currentScore = 0;
         io.emit('updateScore', { score: currentScore, msg: "Game Reset" });
@@ -199,23 +199,16 @@ const tiktokConnection = new TikTokLiveClass("https://www.tiktok.com/@sekza03/li
 
 tiktokConnection.connect().then(() => console.log("✅ บอทเชื่อมต่อแล้ว!")).catch(err => console.error(err));
 
-// 🛡️ ระบบกรองสัญญาณของขวัญเวอร์ชันแก้ไขปัญหาแต้มเกินคอมโบ (+1 เสมอ)
+// 🛡️ โหมดไร้บัก: สั่งนับแยกทีละ 1 ชิ้นดิบๆ โดยไม่สนใจข้อมูลแฝงอื่นๆ ของ TikTok
 tiktokConnection.on('gift', data => {
     const senderName = data.uniqueId || "คนดูในไลฟ์";
+    
+    // ดึงจำนวนของขวัญที่ส่งเข้ามาใน Event นั้นจริงๆ (เช่น ถ้าเขารัวมา 1 ชิ้น มันจะส่งเลข 1 เข้ามา)
+    // การันตีว่าไม่ใช้ค่า repeatCount สะสมย้อนหลังที่จะทำให้แต้มเบิ้ล
+    const currentIncomingAmount = data.amount || 1; 
 
-    // 1. ถ้าเป็นของขวัญประเภท "รัวคอมโบได้" (เช่น กุหลาบ)
-    if (data.giftType === 1) {
-        // ให้รอคิดเงิน "จังหวะสุดท้ายที่คนดูหยุดกด (repeatEnd)" ทีเดียวเท่านั้น! จังหวะรัวระหว่างทางข้ามไปเลย
-        if (data.repeatEnd) {
-            const finalAmount = data.repeatCount || 1;
-            processGiftLogic(data.giftId, finalAmount, senderName);
-        }
-    } 
-    // 2. ถ้าเป็นของขวัญชิ้นใหญ่ (กดทีเดียวส่งเลย ไม่คอมโบ เช่น ไอเลิฟยู, หมี, มงกุฎ)
-    else {
-        const singleAmount = data.repeatCount || 1;
-        processGiftLogic(data.giftId, singleAmount, senderName);
-    }
+    // ส่งไปประมวลผลตามจำนวนจริง ณ วินาทีนั้นทันที
+    processGiftLogic(data.giftId, currentIncomingAmount, senderName);
 });
 
 server.listen(3000, () => console.log('🚀 บอทรันแล้วที่ http://localhost:3000'));
