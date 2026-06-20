@@ -13,6 +13,9 @@ let timeLeft = 300;
 let timerInterval = null;
 let isTimerRunning = false; 
 
+// 📦 คลังเก็บเลข ID ของขวัญที่คิดคะแนนไปแล้วเพื่อป้องกันการนับซ้ำ
+let processedGiftIds = new Set();
+
 function startTimerLogic() {
     if (timerInterval) clearInterval(timerInterval);
     timeLeft = 300; 
@@ -45,6 +48,7 @@ function formatTime(seconds) {
     return `${mins}:${secs}`;
 }
 
+// 1. หน้าจอหลัก (OBS)
 app.get('/', (req, res) => {
     res.setHeader('ngrok-skip-browser-warning', 'true'); 
     res.send(`
@@ -55,7 +59,7 @@ app.get('/', (req, res) => {
                     body { background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; margin: 0; overflow: hidden; }
                     #timer { 
                         font-size: 54px; font-weight: bold; color: #ffc107; 
-                        text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;
+                        text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, -2px 2px 0 #000;
                         opacity: 0; max-height: 0; transform: translateY(-20px); transition: all 0.5s ease-in-out; margin-bottom: 0;
                     }
                     #timer.show { opacity: 1; max-height: 80px; transform: translateY(0); margin-bottom: 10px; }
@@ -84,6 +88,7 @@ app.get('/', (req, res) => {
     `);
 });
 
+// 2. หน้าแผงควบคุมแอดมิน
 app.get('/admin', (req, res) => {
     res.send(`
         <html>
@@ -199,16 +204,43 @@ const tiktokConnection = new TikTokLiveClass("https://www.tiktok.com/@sekza03/li
 
 tiktokConnection.connect().then(() => console.log("✅ บอทเชื่อมต่อแล้ว!")).catch(err => console.error(err));
 
-// 🛡️ โหมดไร้บัก: สั่งนับแยกทีละ 1 ชิ้นดิบๆ โดยไม่สนใจข้อมูลแฝงอื่นๆ ของ TikTok
+// 🛡️ ระบบคัดกรองขั้นเด็ดขาด: ล็อกรหัสธุรกรรมของขวัญรายชิ้น (Anti-Duplicate ID System)
 tiktokConnection.on('gift', data => {
+    // ดึงรหัสเฉพาะของกล่องของขวัญชิ้นนั้นๆ จาก TikTok (ใช้เลข msgId หรือ id)
+    const uniqueGiftId = data.msgId || data.id;
+
+    if (!uniqueGiftId) return;
+
+    // 🚫 ถ้าเลข ID ของขวัญชิ้นนี้ เคยวิ่งเข้ามาและคิดคะแนนไปแล้ว ให้บล็อกทิ้งทันที!
+    if (processedGiftIds.has(uniqueGiftId)) {
+        console.log(`⚠️ ปัดตกสัญญาณเด้งซ้ำซ้อน: รหัสของขวัญเดิม [${uniqueGiftId}]`);
+        return;
+    }
+
+    // 💾 ถ้าเป็นของขวัญชิ้นใหม่ ให้จดบันทึกรหัสลงคลังไว้ทันที จะได้ไม่นับซ้ำอีก
+    processedGiftIds.add(uniqueGiftId);
+
+    // ป้องกันไม่ให้คลังกินแรมคอมพิวเตอร์ (เมื่อครบ 2,000 ชิ้นจะล้างคลังเก่าทิ้ง)
+    if (processedGiftIds.size > 2000) {
+        processedGiftIds.clear();
+    }
+
     const senderName = data.uniqueId || "คนดูในไลฟ์";
     
-    // ดึงจำนวนของขวัญที่ส่งเข้ามาใน Event นั้นจริงๆ (เช่น ถ้าเขารัวมา 1 ชิ้น มันจะส่งเลข 1 เข้ามา)
-    // การันตีว่าไม่ใช้ค่า repeatCount สะสมย้อนหลังที่จะทำให้แต้มเบิ้ล
-    const currentIncomingAmount = data.amount || 1; 
-
-    // ส่งไปประมวลผลตามจำนวนจริง ณ วินาทีนั้นทันที
-    processGiftLogic(data.giftId, currentIncomingAmount, senderName);
+    // ดึงจำนวนของขวัญในก้อนธุรกรรมนี้จริงๆ 
+    // ถ้าเขารัวมาเป็นคอมโบ ตัวจบ (repeatEnd) จะส่งยอดสรุปมาให้ตรงๆ เลย
+    let actualAmount = 1;
+    if (data.giftType === 1) {
+        // สำหรับของขวัญคอมโบ ให้คิดคะแนนเฉพาะรอบที่สรุปยอดจบเท่านั้น (repeatEnd)
+        if (data.repeatEnd) {
+            actualAmount = data.repeatCount || 1;
+            processGiftLogic(data.giftId, actualAmount, senderName);
+        }
+    } else {
+        // สำหรับของขวัญชิ้นใหญ่ คิดคะแนนรอบเดียวจบปกติ
+        actualAmount = data.repeatCount || 1;
+        processGiftLogic(data.giftId, actualAmount, senderName);
+    }
 });
 
 server.listen(3000, () => console.log('🚀 บอทรันแล้วที่ http://localhost:3000'));
